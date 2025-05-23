@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Maze Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.2/p5.min.js"></script>
+    <style>
+        body {
+            background-color: #1a202c;
+            color: #e2e8f0;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: auto;
+        }
+        canvas {
+            border: 2px solid #4a5568;
+            background-color: #2d3748;
+        }
+        #controls, #size-inputs {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+        #modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #2d3748;
+            padding: 20px;
+            border-radius: 0.5rem;
+            border: 2px solid #4a5568;
+            z-index: 1000;
+            text-align: center;
+        }
+        #modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+        /* Tailwind CSS classes (minified subset) */
+        .bg-blue-600{background-color:#2563eb}.bg-blue-700{background-color:#1d4ed8}.bg-gray-600{background-color:#4b5563}.bg-gray-700{background-color:#374151}.bg-green-600{background-color:#16a34a}.bg-green-700{background-color:#15803d}.bg-red-600{background-color:#dc2626}.bg-red-700{background-color:#b91c1c}.text-white{color:#fff}.font-bold{font-weight:700}.py-2{padding-top:.5rem;padding-bottom:.5rem}.px-4{padding-left:1rem;padding-right:1rem}.rounded{border-radius:.25rem}.hover\:bg-blue-700:hover{background-color:#1d4ed8}.hover\:bg-gray-700:hover{background-color:#374151}.hover\:bg-green-700:hover{background-color:#15803d}.hover\:bg-red-700:hover{background-color:#b91c1c}.mt-4{margin-top:1rem}.text-lg{font-size:1.125rem}.w-20{width:5rem}.border-gray-500{border-color:#6b7280}.border-2{border-width:2px}.p-2{padding:.5rem}
+    </style>
+</head>
+<body>
+    <div id="modal-overlay"></div>
+    <div id="modal">
+        <p id="modal-message" class="text-lg text-white"></p>
+        <button id="modal-close" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mt-4">Close</button>
+    </div>
+    <div id="size-inputs">
+        <input type="number" id="mazeWidth" class="w-20 p-2 border-2 border-gray-500 rounded text-white bg-gray-600" placeholder="Width" min="5" max="30" value="20">
+        <input type="number" id="mazeHeight" class="w-20 p-2 border-2 border-gray-500 rounded text-white bg-gray-600" placeholder="Height" min="5" max="30" value="20">
+        <button id="applySizeBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Apply Size</button>
+    </div>
+    <div id="controls">
+        <button id="kruskalBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Run Kruskal's</button>
+        <button id="recursiveDivisionBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Run Recursive Division</button>
+        <button id="pauseBtn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">Pause</button>
+        <button id="speedUpBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">Speed Up</button>
+        <button id="speedDownBtn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">Slow Down</button>
+    </div>
+    <div id="status" class="mt-4 text-lg"></div>
+
+    <script>
+        let maze;
+        let algorithm = null;
+        let animationSpeed = 100;
+        let isPaused = false;
+        let cellSize = 30;
+
+        // DisjointSet for Kruskal's Algorithm
+        class DisjointSet {
+            constructor(n) {
+                this.parent = new Array(n).fill(0).map((_, i) => i);
+                this.rank = new Array(n).fill(0);
+            }
+
+            find(x) {
+                if (this.parent[x] !== x) {
+                    this.parent[x] = this.find(this.parent[x]);
+                }
+                return this.parent[x];
+            }
+
+            union(x, y) {
+                let rootX = this.find(x);
+                let rootY = this.find(y);
+                if (rootX === rootY) return;
+                if (this.rank[rootX] < this.rank[rootY]) {
+                    this.parent[rootX] = rootY;
+                } else if (this.rank[rootX] > this.rank[rootY]) {
+                    this.parent[rootY] = rootX;
+                } else {
+                    this.parent[rootY] = rootX;
+                    this.rank[rootX]++;
+                }
+            }
+        }
+
+        class Maze {
+            constructor(w, h, cellSize) {
+                this.width = w;
+                this.height = h;
+                this.cellSize = cellSize;
+                this.reset();
+            }
+
+            reset() {
+                this.horizontalWalls = Array(this.height + 1).fill().map(() => Array(this.width).fill(true));
+                this.verticalWalls = Array(this.height).fill().map(() => Array(this.width + 1).fill(true));
+                this.edgesAdded = 0;
+                this.totalEdgesNeeded = this.width * this.height - 1;
+                this.state = 'initial';
+                this.edges = [];
+                this.currentEdgeIndex = 0;
+                this.ds = null;
+                this.divisionQueue = [];
+                this.wallsAdded = 0;
+            }
+
+            // Kruskal's Algorithm
+            startKruskal() {
+                this.reset();
+                this.state = 'running';
+                this.edges = [];
+                for (let y = 0; y < this.height; y++) {
+                    for (let x = 0; x < this.width - 1; x++) {
+                        this.edges.push({ x1: x, y1: y, x2: x + 1, y2: y });
+                    }
+                }
+                for (let y = 0; y < this.height - 1; y++) {
+                    for (let x = 0; x < this.width; x++) {
+                        this.edges.push({ x1: x, y1: y, x2: x, y2: y + 1 });
+                    }
+                }
+                for (let i = this.edges.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [this.edges[i], this.edges[j]] = [this.edges[j], this.edges[i]];
+                }
+                this.ds = new DisjointSet(this.width * this.height);
+                this.currentEdgeIndex = 0;
+                document.getElementById('status').innerText = 'Running Kruskal\'s Algorithm: Initial state';
+            }
+
+            stepKruskal() {
+                if (this.currentEdgeIndex >= this.edges.length || this.edgesAdded >= this.totalEdgesNeeded) {
+                    this.state = 'complete';
+                    document.getElementById('status').innerText = `Kruskal's Maze Complete! ${this.edgesAdded} edges added.`;
+                    showModal('Kruskal\'s Maze Generated Successfully!');
+                    return;
+                }
+
+                const edge = this.edges[this.currentEdgeIndex];
+                const cell1 = edge.y1 * this.width + edge.x1;
+                const cell2 = edge.y2 * this.width + edge.x2;
+                const set1 = this.ds.find(cell1);
+                const set2 = this.ds.find(cell2);
+
+                if (set1 !== set2) {
+                    this.ds.union(cell1, cell2);
+                    if (edge.y1 === edge.y2) {
+                        this.verticalWalls[edge.y1][Math.max(edge.x1, edge.x2)] = false;
+                    } else {
+                        this.horizontalWalls[Math.max(edge.y1, edge.y2)][edge.x1] = false;
+                    }
+                    this.edgesAdded++;
+                    document.getElementById('status').innerText = `Kruskal's: Added edge (${edge.x1},${edge.y1})-(${edge.x2},${edge.y2}), Progress: ${this.edgesAdded}/${this.totalEdgesNeeded}`;
+                } else {
+                    document.getElementById('status').innerText = `Kruskal's: Rejected edge (${edge.x1},${edge.y1})-(${edge.x2},${edge.y2}) - would create cycle`;
+                }
+                this.currentEdgeIndex++;
+            }
+
+            // Recursive Division Algorithm
+            startRecursiveDivision() {
+                this.reset();
+                this.horizontalWalls = Array(this.height + 1).fill().map(() => Array(this.width).fill(false));
+                this.verticalWalls = Array(this.height).fill().map(() => Array(this.width + 1).fill(false));
+                for (let x = 0; x < this.width; x++) {
+                    this.horizontalWalls[0][x] = true;
+                    this.horizontalWalls[this.height][x] = true;
+                }
+                for (let y = 0; y < this.height; y++) {
+                    this.verticalWalls[y][0] = true;
+                    this.verticalWalls[y][this.width] = true;
+                }
+                this.wallsAdded = 0;
+                this.divisionQueue = [{ x1: 0, y1: 0, x2: this.width - 1, y2: this.height - 1 }];
+                this.state = 'running';
+                document.getElementById('status').innerText = 'Running Recursive Division: Initial state';
+            }
+
+            stepRecursiveDivision() {
+                if (this.divisionQueue.length === 0) {
+                    this.state = 'complete';
+                    document.getElementById('status').innerText = `Recursive Division Complete! ${this.wallsAdded} walls added.`;
+                    showModal('Recursive Division Maze Generated Successfully!');
+                    return;
+                }
+
+                const { x1, y1, x2, y2 } = this.divisionQueue.shift();
+                const width = x2 - x1 + 1;
+                const height = y2 - y1 + 1;
+
+                if (width < 2 && height < 2) {
+                    return;
+                }
+
+                const divideHorizontally = width < height ? true : height < width ? false : Math.random() < 0.5;
+
+                if (divideHorizontally && height >= 2) {
+                    const y = Math.floor(Math.random() * (y2 - y1)) + y1;
+                    const xPassage = Math.floor(Math.random() * (x2 - x1 + 1)) + x1;
+                    for (let x = x1; x <= x2; x++) {
+                        if (x !== xPassage && y + 1 <= this.height) {
+                            this.horizontalWalls[y + 1][x] = true;
+                            this.wallsAdded++;
+                        }
+                    }
+                    this.divisionQueue.push({ x1, y1, x2, y2: y });
+                    this.divisionQueue.push({ x1, y1: y + 1, x2, y2 });
+                    document.getElementById('status').innerText = `Recursive Division: Added horizontal wall at y=${y + 1}, passage at x=${xPassage}`;
+                } else if (!divideHorizontally && width >= 2) {
+                    const x = Math.floor(Math.random() * (x2 - x1)) + x1;
+                    const yPassage = Math.floor(Math.random() * (y2 - y1 + 1)) + y1;
+                    for (let y = y1; y <= y2; y++) {
+                        if (y !== yPassage && x + 1 <= this.width) {
+                            this.verticalWalls[y][x + 1] = true;
+                            this.wallsAdded++;
+                        }
+                    }
+                    this.divisionQueue.push({ x1, y1, x2: x, y2 });
+                    this.divisionQueue.push({ x1: x + 1, y1, x2, y2 });
+                    document.getElementById('status').innerText = `Recursive Division: Added vertical wall at x=${x + 1}, passage at y=${yPassage}`;
+                }
+            }
+
+            display(p) {
+                p.background(45, 55, 72);
+                p.stroke(255);
+                p.strokeWeight(2);
+
+                for (let y = 0; y <= this.height; y++) {
+                    for (let x = 0; x < this.width; x++) {
+                        if (this.horizontalWalls[y][x]) {
+                            p.line(
+                                x * this.cellSize, y * this.cellSize,
+                                (x + 1) * this.cellSize, y * this.cellSize
+                            );
+                        }
+                    }
+                }
+
+                for (let y = 0; y < this.height; y++) {
+                    for (let x = 0; x <= this.width; x++) {
+                        if (this.verticalWalls[y][x]) {
+                            p.line(
+                                x * this.cellSize, y * this.cellSize,
+                                x * this.cellSize, (y + 1) * this.cellSize
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        function showModal(message) {
+            document.getElementById('modal-message').innerText = message;
+            document.getElementById('modal').style.display = 'block';
+            document.getElementById('modal-overlay').style.display = 'block';
+        }
+
+        function hideModal() {
+            document.getElementById('modal').style.display = 'none';
+            document.getElementById('modal-overlay').style.display = 'none';
+        }
+
+        function setup() {
+            const defaultWidth = 20;
+            const defaultHeight = 20;
+            createCanvas(defaultWidth * cellSize, defaultHeight * cellSize);
+            maze = new Maze(defaultWidth, defaultHeight, cellSize);
+
+            document.getElementById('applySizeBtn').addEventListener('click', () => {
+                let width = parseInt(document.getElementById('mazeWidth').value);
+                let height = parseInt(document.getElementById('mazeHeight').value);
+                if (isNaN(width) || isNaN(height) || width < 5 || height < 5 || width > 30 || height > 30) {
+                    console.log("Using default size (20×20) as input was out of range.");
+                    width = 20;
+                    height = 20;
+                }
+                const canvasWidth = width * cellSize;
+                const canvasHeight = height * cellSize;
+                resizeCanvas(canvasWidth, canvasHeight);
+                maze = new Maze(width, height, cellSize);
+                algorithm = null;
+                isPaused = false;
+                document.getElementById('pauseBtn').innerText = 'Pause';
+                document.getElementById('status').innerText = `Maze size set to ${width}×${height}`;
+            });
+
+            document.getElementById('kruskalBtn').addEventListener('click', () => {
+                maze = new Maze(maze.width, maze.height, cellSize);
+                algorithm = 'kruskal';
+                maze.startKruskal();
+                isPaused = false;
+                document.getElementById('pauseBtn').innerText = 'Pause';
+            });
+
+            document.getElementById('recursiveDivisionBtn').addEventListener('click', () => {
+                maze = new Maze(maze.width, maze.height, cellSize);
+                algorithm = 'recursiveDivision';
+                maze.startRecursiveDivision();
+                isPaused = false;
+                document.getElementById('pauseBtn').innerText = 'Pause';
+            });
+
+            document.getElementById('pauseBtn').addEventListener('click', () => {
+                isPaused = !isPaused;
+                document.getElementById('pauseBtn').innerText = isPaused ? 'Resume' : 'Pause';
+            });
+
+            document.getElementById('speedUpBtn').addEventListener('click', () => {
+                animationSpeed = Math.max(10, animationSpeed - 20);
+                document.getElementById('status').innerText += ` | Speed: ${animationSpeed}ms`;
+            });
+
+            document.getElementById('speedDownBtn').addEventListener('click', () => {
+                animationSpeed = Math.min(500, animationSpeed + 20);
+                document.getElementById('status').innerText += ` | Speed: ${animationSpeed}ms`;
+            });
+
+            document.getElementById('modal-close').addEventListener('click', hideModal);
+        }
+
+        function draw() {
+            if (!maze || !algorithm || isPaused || maze.state === 'complete') {
+                if (maze) maze.display(this);
+                return;
+            }
+
+            if (algorithm === 'kruskal') {
+                maze.stepKruskal();
+            } else if (algorithm === 'recursiveDivision') {
+                maze.stepRecursiveDivision();
+            }
+
+            maze.display(this);
+        }
+    </script>
+</body>
+</html>

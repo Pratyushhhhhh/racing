@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maze Racing</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background-color: #f0f0f0;
+      padding: 20px;
+    }
+
+    .race-container {
+      display: flex;
+      gap: 20px;
+      margin: 20px 0;
+    }
+
+    .racer {
+      border: 2px solid #ccc;
+      padding: 15px;
+      background: white;
+      border-radius: 8px;
+      width: 420px;
+    }
+
+    #controls {
+      margin-bottom: 20px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    button {
+      padding: 8px 16px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+
+    .canvas-container {
+      width: 400px;
+      height: 400px;
+      border: 1px solid #ccc;
+      background-color: white;
+      margin: 10px 0;
+      position: relative;
+    }
+
+    .race-result {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 5px;
+      font-size: 1.2em;
+      width: 800px;
+      text-align: center;
+    }
+
+    .winner {
+      background-color: #e8f5e9;
+      border-left: 5px solid #4CAF50;
+    }
+
+    .loser {
+      background-color: #ffebee;
+      border-left: 5px solid #f44336;
+    }
+
+    select {
+      padding: 6px 12px;
+      margin: 5px 0;
+      width: 200px;
+    }
+    .solving-maze-control {
+        margin: 10px 0;
+        padding: 8px;
+        background: #fff3e0;
+        border-radius: 4px;
+        }
+  </style>
+</head>
+<body>
+  <h1>Maze Racing</h1>
+  
+  <div id="controls">
+    <select id="raceType">
+      <option value="generation">Generation Race</option>
+      <option value="solving">Solving Race</option>
+    </select>
+    <button id="startRace">Start Race</button>
+  </div>
+
+  <!-- Generation Race -->
+  <div id="generationRace" class="race-container">
+    <div class="racer">
+      <h3>Algorithm 1</h3>
+      <select class="gen-algo">
+        <option value="dfs">Depth-First Search</option>
+        <option value="prim">Prim's Algorithm</option>
+        <option value="eller">Eller's Algorithm</option>
+        <option value="kruskal">Kruskal's Algorithm</option>
+        <option value="recdiv">Recursive Division</option>
+      </select>
+      <div class="canvas-container" id="canvas-container-1"></div>
+      <div class="race-info"></div>
+    </div>
+    
+    <div class="racer">
+      <h3>Algorithm 2</h3>
+      <select class="gen-algo">
+        <option value="prim">Prim's Algorithm</option>
+        <option value="dfs">Depth-First Search</option>
+        <option value="eller">Eller's Algorithm</option>
+        <option value="kruskal">Kruskal's Algorithm</option>
+        <option value="recdiv">Recursive Division</option>
+      </select>
+      <div class="canvas-container" id="canvas-container-2"></div>
+      <div class="race-info"></div>
+    </div>
+  </div>
+
+  <!-- Solving Race -->
+  <div id="solvingRace" class="race-container" style="display: none;">
+      <div class="race-controls" style="margin-top: 15px;">
+    <label>Maze Generator for Solving Race:</label>
+    <select id="solvingMazeAlgo">
+      <option value="dfs">DFS</option>
+      <option value="prim">Prim's</option>
+      <option value="eller">Eller's</option>
+      <option value="kruskal">Kruskal's</option>
+    </select>
+    <div class="racer">
+      <h3>Solver 1</h3>
+      <select class="solver-algo">
+        <option value="bfs">Breadth-First Search</option>
+        <option value="astar">A* Algorithm</option>
+        <option value="dijkstra">Dijkstra's Algorithm</option>
+        <option value="wallfollower">Wall Follower</option>
+      </select>
+      <div class="canvas-container" id="solver-canvas-1"></div>
+    </div>
+    
+    <div class="racer">
+      <h3>Solver 2</h3>
+      <select class="solver-algo">
+        <option value="astar">A* Algorithm</option>
+        <option value="bfs">Breadth-First Search</option>
+        <option value="dijkstra">Dijkstra's Algorithm</option>
+        <option value="wallfollower">Wall Follower</option>
+      </select>
+      <div class="canvas-container" id="solver-canvas-2"></div>
+    </div>
+  </div>
+  </div>
+  <div id="raceResult" class="race-result"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+  <script type="module" src="racing.js"></script>
+</body>
+</html>
